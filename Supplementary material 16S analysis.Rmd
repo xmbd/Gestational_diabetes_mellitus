@@ -1,0 +1,281 @@
+---
+title: "16S analysis"
+author: "LXJ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load and install the required packages.
+```{r, echo=TRUE,results='hide', message=FALSE, warning=FALSE}
+x <- c("phyloseq","ggpubr","vegan","tidyverse")
+for (v in x) {
+library(v,character.only = T)  
+}
+
+
+```
+
+
+```{r, echo=TRUE,results='hide', message=FALSE, warning=FALSE}
+
+# Alpha boxplot
+
+phyloseq_obj= import_biom('./table.w_omd.biom','./tree.nwk')
+map_file=import_qiime_sample_data('./metadata_latest.tsv')
+sample_data(phyloseq_obj)=map_file
+colnames(tax_table(phyloseq_obj))=c("Kingdom","Phylum","Class","Order","Family","Genus","Species")
+table(tax_table(phyloseq_obj)[, "Phylum"], exclude = NULL) 
+
+ps0 <- subset_taxa(phyloseq_obj, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
+
+prevdf = apply(X = otu_table(ps0),MARGIN = ifelse(taxa_are_rows(ps0), yes = 1, no = 2),FUN = function(x){sum(x > 0)}) 
+
+prevdf = data.frame(Prevalence = prevdf,TotalAbundance = taxa_sums(ps0),tax_table(ps0))
+
+plyr::ddply(prevdf, "Phylum",function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence), sum(df1$TotalAbundance))})
+
+filterPhyla = c("p__Acidobacteria","p__BRC1", "p__Chlamydiae","p__Chloroflexi","p__Elusimicrobia","p__Euryarchaeota","p__NKB19","p__OD1","p__SR1","p__TM7")
+
+ps1 = subset_taxa(ps0, !Phylum %in% filterPhyla);ps1
+
+## Alpha diversity using phyloseq
+library(ggplot2)
+library(ggpubr)
+library(ggsignif)
+esti_alpha<-estimate_richness(ps0, measures = c("Observed","Shannon","ACE","Chao1","Simpson"))
+esti_alpha<- cbind(map_file,esti_alpha)
+p1<-ggplot(esti_alpha,aes(x = Condition, y = Shannon,fill = Condition, color=Condition))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey20"))+
+  scale_fill_manual(values = c("grey80", "grey20"))+
+  theme
+p1
+
+p2<-ggplot(esti_alpha,aes(x = Condition, y = Simpson, fill = Condition, color=Condition))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey20"))+
+  scale_fill_manual(values = c("grey80", "grey20"))+
+  theme
+p2
+
+p3<-ggplot(esti_alpha,aes(x = Condition, y = Observed, fill = Condition, color=Condition))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey20"))+
+  scale_fill_manual(values = c("grey80", "grey20"))+
+  theme
+p3
+
+p3+stat_summary(geom = "crossbar", width=0.65, fatten=0, color="white", fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x))) })+
+  theme(legend.position="top", 
+        legend.title=element_blank(), 
+        panel.grid.major.x=element_blank(),
+        text = element_text(size = 18),
+        axis.title.x = element_blank())+
+  facet_wrap(~Trimester)+
+  stat_compare_means(label.y = 425)
+
+p4<-ggplot(esti_alpha, aes(x = Trimester, y = Observed, fill = Trimester, color = Trimester))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey50","grey20"))+
+  scale_fill_manual(values = c("grey80", "grey50", "grey20"))+
+  theme
+p4
+
+p5<-ggplot(esti_alpha, aes(x = Trimester, y = Shannon, fill = Trimester, color = Trimester))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey50","grey20"))+
+  scale_fill_manual(values = c("grey80", "grey50", "grey20"))+
+  theme
+p5
+
+p6<-ggplot(esti_alpha, aes(x = Trimester, y = Simpson, fill = Trimester, color = Trimester))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey50","grey20"))+
+  scale_fill_manual(values = c("grey80", "grey50", "grey20"))+
+  theme
+p6
+
+p4+stat_summary(geom = "crossbar", width=0.65, fatten=0, color="white", fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x))) })+
+  theme(legend.position="top", 
+        legend.title=element_blank(), 
+        panel.grid.major.x=element_blank(),
+        text = element_text(size = 18),
+        axis.title.x = element_blank())+
+  facet_wrap(~Condition)+
+  stat_compare_means(method = "t.test",comparisons = list(c("T1","T2"),c("T1","T3"),c("T2","T3")))
+  
+p7<-ggplot(esti_alpha,aes(x = Condition, y = Chao1, fill = Condition, color=Condition))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey20"))+
+  scale_fill_manual(values = c("grey80", "grey20"))+
+  theme
+
+p8<-ggplot(esti_alpha,aes(x = Condition, y = ACE, fill = Condition, color=Condition))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey20"))+
+  scale_fill_manual(values = c("grey80", "grey20"))+
+  theme
+
+
+
+p8+stat_summary(geom = "crossbar", width=0.65, fatten=0, color="white", fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x))) })+
+  theme(legend.position="top", 
+        legend.title=element_blank(), 
+        panel.grid.major.x=element_blank(),
+        text = element_text(size = 18),
+        axis.title.x = element_blank())+
+  facet_wrap(~Trimester)+
+  stat_compare_means(label.y = 400, method = "wilcox.test")
+
+p9<-ggplot(esti_alpha, aes(x = Trimester, y = ACE, fill = Trimester, color = Trimester))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey50","grey20"))+
+  scale_fill_manual(values = c("grey80", "grey50", "grey20"))+
+  theme
+
+p10<-ggplot(esti_alpha, aes(x = Trimester, y = Chao1, fill = Trimester, color = Trimester))+
+  geom_boxplot()+
+  scale_color_manual(values = c("grey80", "grey50","grey20"))+
+  scale_fill_manual(values = c("grey80", "grey50", "grey20"))+
+  theme
+
+p9+stat_summary(geom = "crossbar", width=0.65, fatten=0, color="white", fun.data = function(x){ return(c(y=median(x), ymin=median(x), ymax=median(x))) })+
+  theme(legend.position="top", 
+        legend.title=element_blank(), 
+        panel.grid.major.x=element_blank(),
+        text = element_text(size = 18),
+        axis.title.x = element_blank())+
+  facet_wrap(~Condition)+
+  stat_compare_means(method = "t.test",comparisons = list(c("T1","T2"),c("T1","T3"),c("T2","T3")))
+
+# anova test for three times.
+## delet outlier c07
+esti_alpha_trimmed=esti_alpha[-7,]
+attach(esti_alpha_trimmed)
+anova_ace<- aov(ACE[Condition == "normal"]~Trimester[Condition == "normal"])
+summary(anova_ace)
+library(agricolae)
+tukey_result <- HSD.test(anova_ace,"Trimester",group = F)
+print(tukey_result)
+```
+
+# Permutation test
+
+```{r}
+
+pvalue1<-apply(c1[,1411:2186],2,function(x){
+  cat(x,"\n")
+  aa <- cbind(x,time1)
+  colnames(aa)[1]="otu"
+  RT_PERM<- ezPerm(data = aa,dv=otu,wid = Patient,between = .(Condition))
+  p1<-RT_PERM$p
+  write.table(p1,file="ez_pvalue1.txt",row.names = F,sep = "\t",append = T,col.names = F,quote = F)
+})
+
+#----------------1e4-----------------
+eztest1<-apply(sigcount1,2,function(x){
+  cat(x,"\n")
+  aa <- cbind(x,time1)
+  colnames(aa)[1]="otu"
+  RT_PERM<- ezPerm(data = aa,dv=otu,wid = Patient,between = .(Condition),perms = 1e4)
+  p1<-RT_PERM$p
+  write.table(p1,file="sig_ez_1e4_pvalue1.txt",row.names = F,sep = "\t",append = T,col.names = F,quote = F)
+})
+eztest2<-apply(sigcount2,2,function(x){
+  cat(x,"\n")
+  aa <- cbind(x,time2)
+  colnames(aa)[1]="otu"
+  RT_PERM<- ezPerm(data = aa,dv=otu,wid = Patient,between = .(Condition),perms = 1e4)
+  p2<-RT_PERM$p
+  write.table(p2,file="sig_ez_1e4_pvalue2.txt",row.names = F,sep = "\t",append = T,col.names = F,quote = F)
+})
+
+
+#violin plot
+
+##prepare
+id2<-colnames(c2)
+p2form<-data.frame(id2,p2)
+p2ordered <- p2form[order(p2form$V1)]
+p2sig<-subset(p2ordered,V1<=0.05)
+sig2names<-as.character(p2sig$id2)
+draw2 <- c2[,sig2names]
+drawform2 <- cbind(time2,draw2)
+
+##t2
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+n2 <- colnames(form2)[111:122]
+v2 <- lapply(n2,function(i){
+  print(i)
+  ggplot(form2,mapping = aes_string(x = 'Condition',y = form2[,i],color = "Condition", fill = 'Condition')) +
+    geom_violin(aes(x = Condition,y = form2[,i], fill = Condition)) +
+    geom_jitter(aes(x = Condition, y =form2[,i], color = Condition)) + 
+    labs(x="",y=i) + 
+    stat_compare_means()
+})
+pdf("./t2_wilcoxon1.pdf",width = 25, height = 17)
+plot_grid(plotlist = v2,ncol = 3)
+dev.off()
+#pdf("/media/H/lxjworkdiary/0921night/pm2.5violin.pdf",width = 25, height = 17)
+#plot_grid(p2.5a[[1]],p2.5a[[2]],p2.5a[[3]],p2.5a[[4]],p2.5a[[5]],p2.5a[[6]],p2.5a[[7]],p2.5a[[8]],p2.5a[[9]],p2.5a[[10]] ,ncol=3)
+#dev.off()
+
+##t3
+names3 <- colnames(drawform3)[7:18]
+v3test <- lapply(names3,function(i){
+  print(i)
+  ggplot(drawform3,mapping = aes_string(x = 'Condition',y = drawform3[,i],color = "Condition", fill = 'Condition')) +
+    geom_violin(aes(x = Condition,y = drawform3[,i], fill = Condition)) +
+    geom_jitter(aes(x = Condition, y =drawform3[,i], color = Condition)) + 
+    labs(x="",y=i) + 
+    stat_compare_means(method = "t.test")
+})
+pdf("./time3_ttest.pdf",width = 25, height = 17)
+plot_grid(plotlist = v3test,ncol = 3)
+dev.off()
+#p<0.01
+names2001 <- colnames(drawform2001)[7:18]
+v2001 <- lapply(names2001,function(i){
+  print(i)
+  ggplot(drawform2001,mapping = aes_string(x = 'Condition',y = drawform2001[,i],color = "Condition", fill = 'Condition')) +
+    geom_violin(aes(x = Condition,y = drawform2001[,i], fill = Condition)) +
+    geom_jitter(aes(x = Condition, y =drawform2001[,i], color = Condition)) + 
+    labs(x="",y=i) + 
+    stat_compare_means(method = "t.test")
+})
+pdf("./time2001_ttest.pdf",width = 25, height = 17)
+plot_grid(plotlist = v2001,ncol = 3)
+dev.off()
+##1E4 VIOLIN
+
+names3001 <- colnames(draw3)[6:26]
+violin3 <- lapply(names3001,function(i){
+  print(i)
+  ggplot(draw3,mapping = aes_string(x = 'Condition',y = draw3[,i],color = "Condition", fill = 'Condition')) +
+    geom_violin(aes(x = Condition,y = draw3[,i], fill = Condition)) +
+    geom_jitter(aes(x = Condition, y =draw3[,i], color = Condition)) + 
+    labs(x="",y=i) + 
+    stat_compare_means(method = "t.test")
+})
+pdf("./1e4_time3001_2ttest.pdf",width = 25, height = 17)
+plot_grid(plotlist = violin1,ncol = 3)
+dev.off()
+
+##ez for c2-c1
+ez_c2_c1 <- cbind()
+
+ezc2_c1p<-apply(c2_c1log[,1214:1407],2,function(x){
+  cat(x,"\n")
+  aa <- cbind(x,time2cross)
+  colnames(aa)[1]="otu"
+  RT_PERM<- ezPerm(data = aa,dv=otu,wid = Patient,between = .(Condition),perms = 1e4)
+  p2<-RT_PERM$p
+  write.table(p2,file="fortest.txt",row.names = F,sep = "\t",append = T,col.names = F,quote = F)
+})
+```
+
